@@ -27,6 +27,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
 
     private final WebClient.Builder webClientBuilder;
+    
 
     public String placeOrder(OrderRequest orderRequest) {
 
@@ -40,8 +41,8 @@ public class OrderService {
 
         //check in inventory if that order is available in stock or not
         InventoryResponse[] inventoryResponseArray = webClientBuilder.build().get()
-                .uri("http://ibm-pf4sxxgp.in.ibm.com:7020/api/inventory",
-                        uriBuilder -> uriBuilder.queryParam("skuCode", skuCodes).build())
+                .uri("http://inventory-service/api/inventory/check-inventory",
+                        uriBuilder -> uriBuilder.queryParam("name", skuCodes).build())
                 .retrieve()
                 .bodyToMono(InventoryResponse[].class)
                 .block();
@@ -51,10 +52,23 @@ public class OrderService {
         }
         else {
             orderRepository.save(order);
+            System.out.println(skuCodes);
+//             Decrement product quantities in inventory
+            decrementProductQuantities(skuCodes);
             return "Order Placed successfully!!" ;
         }
     }
 
+    private void decrementProductQuantities(List<String> skuCodes) {
+    	  webClientBuilder.build().post()
+    	    .uri("http://inventory-service/api/inventory/decrement-stock")  // Use the correct endpoint
+    	    .bodyValue(skuCodes)  // Send the entire list in the request body
+    	    .retrieve()
+    	    .toBodilessEntity()
+    	    .block();  
+        }
+    
+    
     private Order getOrderObject(OrderRequest orderRequest) {
     	System.out.println("inside getOrders");
     	System.out.println(orderRequest);
@@ -68,7 +82,8 @@ public class OrderService {
                 .orderLineItemsList(orderLineItems)
                 .build();
     }
-
+    
+    
     private OrderLineItems mapToOrderLineItem(OrderLineItemsDto orderLineItemsDto) {
         return OrderLineItems.builder()
                 .skuCode(orderLineItemsDto.getSkuCode())
